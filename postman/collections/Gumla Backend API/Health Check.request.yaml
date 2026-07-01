@@ -1,0 +1,44 @@
+$kind: http-request
+name: 'Health Check'
+description: |-
+  Checks whether the Gumla backend server is running and healthy.
+
+  **Auth:** None required
+
+  **Response `200 OK`**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "status": "ok",
+      "version": "1.0.0",
+      "time": "2026-07-01T10:00:00Z"
+    }
+  }
+  ```
+method: GET
+url: '{{base_url}}/api/v1/health'
+order: 1000
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response has success: true", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.success).to.eql(true);
+      });
+
+      pm.test("Response has data.status: ok", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.data.status).to.eql("ok");
+      });
+
+      pm.test("Response time is less than 500ms", function () {
+          pm.expect(pm.response.responseTime).to.be.below(500);
+      });

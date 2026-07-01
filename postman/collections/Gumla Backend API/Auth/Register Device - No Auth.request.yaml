@@ -1,0 +1,27 @@
+$kind: http-request
+name: 'Register Device - No Auth'
+description: |-
+  Negative test — verifies that the register-device endpoint returns `401 UNAUTHORIZED` when called without a Bearer token.
+method: POST
+url: '{{base_url}}/api/v1/auth/register-device'
+order: 7000
+auth:
+  type: noauth
+body:
+  type: json
+  content: |-
+    {
+      "fcm_token": "sample_fcm_token"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 401", function () {
+          pm.response.to.have.status(401);
+      });
+
+      pm.test("Response has error code UNAUTHORIZED", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.error.code).to.eql("UNAUTHORIZED");
+      });

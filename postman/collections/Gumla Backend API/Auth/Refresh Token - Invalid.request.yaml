@@ -1,0 +1,27 @@
+$kind: http-request
+name: 'Refresh Token - Invalid'
+description: |-
+  Negative test — verifies that the refresh endpoint returns `401 UNAUTHORIZED` when a garbage or already-revoked refresh token is provided.
+method: POST
+url: '{{base_url}}/api/v1/auth/refresh'
+order: 5000
+auth:
+  type: noauth
+body:
+  type: json
+  content: |-
+    {
+      "refresh_token": "invalid.refresh.token"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 401", function () {
+          pm.response.to.have.status(401);
+      });
+
+      pm.test("Response has error code UNAUTHORIZED", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.error.code).to.eql("UNAUTHORIZED");
+      });

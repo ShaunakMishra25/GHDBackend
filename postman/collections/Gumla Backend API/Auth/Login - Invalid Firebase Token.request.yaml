@@ -1,0 +1,28 @@
+$kind: http-request
+name: 'Login - Invalid Firebase Token'
+description: |-
+  Negative test — verifies that the login endpoint returns `401 UNAUTHORIZED` when an invalid or malformed Firebase ID token is provided.
+method: POST
+url: '{{base_url}}/api/v1/auth/login'
+order: 3000
+auth:
+  type: noauth
+body:
+  type: json
+  content: |-
+    {
+      "phone": "+919876543210",
+      "id_token": "invalid_token_here"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 401", function () {
+          pm.response.to.have.status(401);
+      });
+
+      pm.test("Response has error code UNAUTHORIZED", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.error.code).to.eql("UNAUTHORIZED");
+      });

@@ -1,0 +1,7 @@
+$kind: collection
+name: 'Gumla Backend API'
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{access_token}}'

@@ -1,0 +1,18 @@
+name: Gumla Local
+variables:
+  - key: base_url
+    value: 'http://localhost:8080'
+    type: default
+    enabled: true
+  - key: access_token
+    value: ''
+    type: secret
+    enabled: true
+  - key: refresh_token
+    value: ''
+    type: secret
+    enabled: true
+  - key: firebase_id_token
+    value: ''
+    type: secret
+    enabled: true

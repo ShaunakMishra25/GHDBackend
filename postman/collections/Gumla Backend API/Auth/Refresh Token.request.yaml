@@ -1,0 +1,63 @@
+$kind: http-request
+name: 'Refresh Token'
+description: |-
+  Issues a new JWT access/refresh token pair by validating the provided refresh token. The old refresh token is revoked (token rotation) to prevent reuse.
+
+  **Auth:** None required
+
+  **Request Body**
+  | Field | Type | Required | Description |
+  |---|---|---|---|
+  | `refresh_token` | string | ✅ | A valid, non-blacklisted refresh JWT |
+
+  **Response `200 OK`**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "access_token": "<new-jwt>",
+      "refresh_token": "<new-jwt>"
+    }
+  }
+  ```
+
+  **Errors**
+  | Status | Code | Reason |
+  |---|---|---|
+  | 401 | `UNAUTHORIZED` | Token is invalid, expired, or already revoked |
+
+  > 💡 On success, the new tokens are automatically saved to the active environment.
+method: POST
+url: '{{base_url}}/api/v1/auth/refresh'
+order: 4000
+auth:
+  type: noauth
+body:
+  type: json
+  content: |-
+    {
+      "refresh_token": "{{refresh_token}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response has new access_token", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.data).to.have.property("access_token");
+      });
+
+      pm.test("Response has new refresh_token", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.data).to.have.property("refresh_token");
+      });
+
+      if (pm.response.code === 200) {
+          const jsonData = pm.response.json();
+          pm.environment.set("access_token", jsonData.data.access_token);
+          pm.environment.set("refresh_token", jsonData.data.refresh_token);
+      }
