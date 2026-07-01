@@ -3,6 +3,8 @@ sql:
   - schema: "migrations"
     queries: 
       - "internal/auth/queries.sql"
+      - "internal/category/queries.sql"
+      - "internal/product/queries.sql"
     engine: "postgresql"
     gen:
       go:

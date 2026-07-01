@@ -15,7 +15,9 @@ import (
 
 	"github.com/gumla-hds/gumla-backend/config"
 	"github.com/gumla-hds/gumla-backend/internal/auth"
+	"github.com/gumla-hds/gumla-backend/internal/category"
 	"github.com/gumla-hds/gumla-backend/internal/middleware"
+	"github.com/gumla-hds/gumla-backend/internal/product"
 	"github.com/gumla-hds/gumla-backend/pkg/firebase"
 	jwtpkg "github.com/gumla-hds/gumla-backend/pkg/jwt"
 	"github.com/gumla-hds/gumla-backend/pkg/razorpay"
@@ -69,6 +71,14 @@ func (s *Server) setupRoutes() {
 
 	authHandler := auth.NewHandler(authSvc, s.JWTManager)
 
+	categoryRepo := category.NewRepository(s.DB)
+	categorySvc := category.NewService(categoryRepo)
+	categoryHandler := category.NewHandler(categorySvc)
+
+	productRepo := product.NewRepository(s.DB)
+	productSvc := product.NewService(productRepo)
+	productHandler := product.NewHandler(productSvc)
+
 	api := s.Router.Group("/api/v1")
 	{
 		api.GET("/health", s.handleHealth)
@@ -84,6 +94,36 @@ func (s *Server) setupRoutes() {
 			{
 				protected.POST("/logout", authHandler.Logout)
 				protected.POST("/register-device", authHandler.RegisterDevice)
+			}
+		}
+
+		categoryGroup := api.Group("/categories")
+		{
+			categoryGroup.GET("", categoryHandler.List)
+			categoryGroup.GET("/:id", categoryHandler.GetByID)
+
+			adminCategories := categoryGroup.Group("")
+			adminCategories.Use(middleware.RequireAuth(s.JWTManager, authSvc.IsTokenBlacklisted))
+			adminCategories.Use(middleware.RequireRole("admin"))
+			{
+				adminCategories.POST("", categoryHandler.Create)
+				adminCategories.PUT("/:id", categoryHandler.Update)
+				adminCategories.DELETE("/:id", categoryHandler.Delete)
+			}
+		}
+
+		productGroup := api.Group("/products")
+		{
+			productGroup.GET("", productHandler.List)
+			productGroup.GET("/:id", productHandler.GetByID)
+
+			adminProducts := productGroup.Group("")
+			adminProducts.Use(middleware.RequireAuth(s.JWTManager, authSvc.IsTokenBlacklisted))
+			adminProducts.Use(middleware.RequireRole("admin"))
+			{
+				adminProducts.POST("", productHandler.Create)
+				adminProducts.PUT("/:id", productHandler.Update)
+				adminProducts.DELETE("/:id", productHandler.Delete)
 			}
 		}
 	}

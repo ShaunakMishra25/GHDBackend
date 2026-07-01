@@ -12,6 +12,107 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countProducts = `-- name: CountProducts :one
+SELECT COUNT(*) FROM products p
+WHERE p.is_active = true
+  AND ($1::bigint IS NULL OR p.category_id = $1)
+  AND ($2::text IS NULL OR p.name_hi ILIKE '%' || $2 || '%' OR p.name_en ILIKE '%' || $2 || '%')
+`
+
+type CountProductsParams struct {
+	CategoryID pgtype.Int8 `json:"category_id"`
+	Search     pgtype.Text `json:"search"`
+}
+
+func (q *Queries) CountProducts(ctx context.Context, arg CountProductsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countProducts, arg.CategoryID, arg.Search)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const createCategory = `-- name: CreateCategory :one
+INSERT INTO categories (name_hi, name_en, image_url, sort_order)
+VALUES ($1, $2, $3, $4)
+RETURNING id, name_hi, name_en, image_url, sort_order, is_active, created_at
+`
+
+type CreateCategoryParams struct {
+	NameHi    string `json:"name_hi"`
+	NameEn    string `json:"name_en"`
+	ImageUrl  string `json:"image_url"`
+	SortOrder int32  `json:"sort_order"`
+}
+
+func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error) {
+	row := q.db.QueryRow(ctx, createCategory,
+		arg.NameHi,
+		arg.NameEn,
+		arg.ImageUrl,
+		arg.SortOrder,
+	)
+	var i Category
+	err := row.Scan(
+		&i.ID,
+		&i.NameHi,
+		&i.NameEn,
+		&i.ImageUrl,
+		&i.SortOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createProduct = `-- name: CreateProduct :one
+INSERT INTO products (category_id, name_hi, name_en, description_hi, description_en, price, unit, image_url, stock_qty)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, category_id, name_hi, name_en, description_hi, description_en, price, unit, image_url, is_active, stock_qty, created_at, updated_at
+`
+
+type CreateProductParams struct {
+	CategoryID    int64          `json:"category_id"`
+	NameHi        string         `json:"name_hi"`
+	NameEn        string         `json:"name_en"`
+	DescriptionHi string         `json:"description_hi"`
+	DescriptionEn string         `json:"description_en"`
+	Price         pgtype.Numeric `json:"price"`
+	Unit          string         `json:"unit"`
+	ImageUrl      string         `json:"image_url"`
+	StockQty      pgtype.Numeric `json:"stock_qty"`
+}
+
+func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error) {
+	row := q.db.QueryRow(ctx, createProduct,
+		arg.CategoryID,
+		arg.NameHi,
+		arg.NameEn,
+		arg.DescriptionHi,
+		arg.DescriptionEn,
+		arg.Price,
+		arg.Unit,
+		arg.ImageUrl,
+		arg.StockQty,
+	)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.CategoryID,
+		&i.NameHi,
+		&i.NameEn,
+		&i.DescriptionHi,
+		&i.DescriptionEn,
+		&i.Price,
+		&i.Unit,
+		&i.ImageUrl,
+		&i.IsActive,
+		&i.StockQty,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (phone, name, role)
 VALUES ($1, $2, $3)
@@ -36,6 +137,106 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteCategory = `-- name: DeleteCategory :exec
+UPDATE categories SET is_active = false WHERE id = $1
+`
+
+func (q *Queries) DeleteCategory(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteCategory, id)
+	return err
+}
+
+const deleteProduct = `-- name: DeleteProduct :exec
+UPDATE products SET is_active = false, updated_at = NOW() WHERE id = $1
+`
+
+func (q *Queries) DeleteProduct(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteProduct, id)
+	return err
+}
+
+const getCategoryByID = `-- name: GetCategoryByID :one
+SELECT id, name_hi, name_en, image_url, sort_order, is_active, created_at FROM categories WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetCategoryByID(ctx context.Context, id int64) (Category, error) {
+	row := q.db.QueryRow(ctx, getCategoryByID, id)
+	var i Category
+	err := row.Scan(
+		&i.ID,
+		&i.NameHi,
+		&i.NameEn,
+		&i.ImageUrl,
+		&i.SortOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getProductByID = `-- name: GetProductByID :one
+SELECT id, category_id, name_hi, name_en, description_hi, description_en, price, unit, image_url, is_active, stock_qty, created_at, updated_at FROM products WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetProductByID(ctx context.Context, id int64) (Product, error) {
+	row := q.db.QueryRow(ctx, getProductByID, id)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.CategoryID,
+		&i.NameHi,
+		&i.NameEn,
+		&i.DescriptionHi,
+		&i.DescriptionEn,
+		&i.Price,
+		&i.Unit,
+		&i.ImageUrl,
+		&i.IsActive,
+		&i.StockQty,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getProductsByIDs = `-- name: GetProductsByIDs :many
+SELECT id, category_id, name_hi, name_en, description_hi, description_en, price, unit, image_url, is_active, stock_qty, created_at, updated_at FROM products WHERE id = ANY($1::bigint[])
+`
+
+func (q *Queries) GetProductsByIDs(ctx context.Context, ids []int64) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getProductsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.CategoryID,
+			&i.NameHi,
+			&i.NameEn,
+			&i.DescriptionHi,
+			&i.DescriptionEn,
+			&i.Price,
+			&i.Unit,
+			&i.ImageUrl,
+			&i.IsActive,
+			&i.StockQty,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUserByID = `-- name: GetUserByID :one
@@ -119,6 +320,126 @@ func (q *Queries) IsTokenBlacklisted(ctx context.Context, tokenJti string) (bool
 	return is_blacklisted, err
 }
 
+const listAllCategories = `-- name: ListAllCategories :many
+SELECT id, name_hi, name_en, image_url, sort_order, is_active, created_at FROM categories ORDER BY sort_order ASC, id ASC
+`
+
+func (q *Queries) ListAllCategories(ctx context.Context) ([]Category, error) {
+	rows, err := q.db.Query(ctx, listAllCategories)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Category
+	for rows.Next() {
+		var i Category
+		if err := rows.Scan(
+			&i.ID,
+			&i.NameHi,
+			&i.NameEn,
+			&i.ImageUrl,
+			&i.SortOrder,
+			&i.IsActive,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCategories = `-- name: ListCategories :many
+SELECT id, name_hi, name_en, image_url, sort_order, is_active, created_at FROM categories WHERE is_active = true ORDER BY sort_order ASC, id ASC
+`
+
+func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
+	rows, err := q.db.Query(ctx, listCategories)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Category
+	for rows.Next() {
+		var i Category
+		if err := rows.Scan(
+			&i.ID,
+			&i.NameHi,
+			&i.NameEn,
+			&i.ImageUrl,
+			&i.SortOrder,
+			&i.IsActive,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProducts = `-- name: ListProducts :many
+SELECT p.id, p.category_id, p.name_hi, p.name_en, p.description_hi, p.description_en, p.price, p.unit, p.image_url, p.is_active, p.stock_qty, p.created_at, p.updated_at FROM products p
+WHERE p.is_active = true
+  AND ($1::bigint IS NULL OR p.category_id = $1)
+  AND ($2::text IS NULL OR p.name_hi ILIKE '%' || $2 || '%' OR p.name_en ILIKE '%' || $2 || '%')
+ORDER BY p.created_at DESC
+LIMIT $4
+OFFSET $3
+`
+
+type ListProductsParams struct {
+	CategoryID pgtype.Int8 `json:"category_id"`
+	Search     pgtype.Text `json:"search"`
+	Offset     int32       `json:"offset"`
+	Limit      int32       `json:"limit"`
+}
+
+func (q *Queries) ListProducts(ctx context.Context, arg ListProductsParams) ([]Product, error) {
+	rows, err := q.db.Query(ctx, listProducts,
+		arg.CategoryID,
+		arg.Search,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.CategoryID,
+			&i.NameHi,
+			&i.NameEn,
+			&i.DescriptionHi,
+			&i.DescriptionEn,
+			&i.Price,
+			&i.Unit,
+			&i.ImageUrl,
+			&i.IsActive,
+			&i.StockQty,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revokeToken = `-- name: RevokeToken :exec
 INSERT INTO token_blacklist (token_jti, expires_at)
 VALUES ($1, $2)
@@ -133,6 +454,95 @@ type RevokeTokenParams struct {
 func (q *Queries) RevokeToken(ctx context.Context, arg RevokeTokenParams) error {
 	_, err := q.db.Exec(ctx, revokeToken, arg.TokenJti, arg.ExpiresAt)
 	return err
+}
+
+const updateCategory = `-- name: UpdateCategory :one
+UPDATE categories
+SET name_hi = $2, name_en = $3, image_url = $4, sort_order = $5
+WHERE id = $1
+RETURNING id, name_hi, name_en, image_url, sort_order, is_active, created_at
+`
+
+type UpdateCategoryParams struct {
+	ID        int64  `json:"id"`
+	NameHi    string `json:"name_hi"`
+	NameEn    string `json:"name_en"`
+	ImageUrl  string `json:"image_url"`
+	SortOrder int32  `json:"sort_order"`
+}
+
+func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error) {
+	row := q.db.QueryRow(ctx, updateCategory,
+		arg.ID,
+		arg.NameHi,
+		arg.NameEn,
+		arg.ImageUrl,
+		arg.SortOrder,
+	)
+	var i Category
+	err := row.Scan(
+		&i.ID,
+		&i.NameHi,
+		&i.NameEn,
+		&i.ImageUrl,
+		&i.SortOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateProduct = `-- name: UpdateProduct :one
+UPDATE products
+SET category_id = $2, name_hi = $3, name_en = $4, description_hi = $5, description_en = $6,
+    price = $7, unit = $8, image_url = $9, stock_qty = $10, updated_at = NOW()
+WHERE id = $1
+RETURNING id, category_id, name_hi, name_en, description_hi, description_en, price, unit, image_url, is_active, stock_qty, created_at, updated_at
+`
+
+type UpdateProductParams struct {
+	ID            int64          `json:"id"`
+	CategoryID    int64          `json:"category_id"`
+	NameHi        string         `json:"name_hi"`
+	NameEn        string         `json:"name_en"`
+	DescriptionHi string         `json:"description_hi"`
+	DescriptionEn string         `json:"description_en"`
+	Price         pgtype.Numeric `json:"price"`
+	Unit          string         `json:"unit"`
+	ImageUrl      string         `json:"image_url"`
+	StockQty      pgtype.Numeric `json:"stock_qty"`
+}
+
+func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error) {
+	row := q.db.QueryRow(ctx, updateProduct,
+		arg.ID,
+		arg.CategoryID,
+		arg.NameHi,
+		arg.NameEn,
+		arg.DescriptionHi,
+		arg.DescriptionEn,
+		arg.Price,
+		arg.Unit,
+		arg.ImageUrl,
+		arg.StockQty,
+	)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.CategoryID,
+		&i.NameHi,
+		&i.NameEn,
+		&i.DescriptionHi,
+		&i.DescriptionEn,
+		&i.Price,
+		&i.Unit,
+		&i.ImageUrl,
+		&i.IsActive,
+		&i.StockQty,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateUser = `-- name: UpdateUser :exec
