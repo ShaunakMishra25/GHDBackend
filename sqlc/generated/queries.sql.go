@@ -12,6 +12,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearCart = `-- name: ClearCart :exec
+DELETE FROM cart_items WHERE user_id = $1
+`
+
+func (q *Queries) ClearCart(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, clearCart, userID)
+	return err
+}
+
 const countProducts = `-- name: CountProducts :one
 SELECT COUNT(*) FROM products p
 WHERE p.is_active = true
@@ -29,6 +38,47 @@ func (q *Queries) CountProducts(ctx context.Context, arg CountProductsParams) (i
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const createAddress = `-- name: CreateAddress :one
+INSERT INTO addresses (user_id, label, full_address, landmark, latitude, longitude, is_default)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, user_id, label, full_address, landmark, latitude, longitude, is_default, created_at
+`
+
+type CreateAddressParams struct {
+	UserID      int64          `json:"user_id"`
+	Label       string         `json:"label"`
+	FullAddress string         `json:"full_address"`
+	Landmark    string         `json:"landmark"`
+	Latitude    pgtype.Numeric `json:"latitude"`
+	Longitude   pgtype.Numeric `json:"longitude"`
+	IsDefault   bool           `json:"is_default"`
+}
+
+func (q *Queries) CreateAddress(ctx context.Context, arg CreateAddressParams) (Address, error) {
+	row := q.db.QueryRow(ctx, createAddress,
+		arg.UserID,
+		arg.Label,
+		arg.FullAddress,
+		arg.Landmark,
+		arg.Latitude,
+		arg.Longitude,
+		arg.IsDefault,
+	)
+	var i Address
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Label,
+		&i.FullAddress,
+		&i.Landmark,
+		&i.Latitude,
+		&i.Longitude,
+		&i.IsDefault,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const createCategory = `-- name: CreateCategory :one
@@ -139,6 +189,20 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteAddress = `-- name: DeleteAddress :exec
+DELETE FROM addresses WHERE id = $1 AND user_id = $2
+`
+
+type DeleteAddressParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteAddress(ctx context.Context, arg DeleteAddressParams) error {
+	_, err := q.db.Exec(ctx, deleteAddress, arg.ID, arg.UserID)
+	return err
+}
+
 const deleteCategory = `-- name: DeleteCategory :exec
 UPDATE categories SET is_active = false WHERE id = $1
 `
@@ -157,6 +221,122 @@ func (q *Queries) DeleteProduct(ctx context.Context, id int64) error {
 	return err
 }
 
+const getAddressByID = `-- name: GetAddressByID :one
+SELECT id, user_id, label, full_address, landmark, latitude, longitude, is_default, created_at FROM addresses WHERE id = $1 AND user_id = $2 LIMIT 1
+`
+
+type GetAddressByIDParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) GetAddressByID(ctx context.Context, arg GetAddressByIDParams) (Address, error) {
+	row := q.db.QueryRow(ctx, getAddressByID, arg.ID, arg.UserID)
+	var i Address
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Label,
+		&i.FullAddress,
+		&i.Landmark,
+		&i.Latitude,
+		&i.Longitude,
+		&i.IsDefault,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getCartByUserID = `-- name: GetCartByUserID :many
+SELECT ci.id, ci.user_id, ci.product_id, ci.quantity, ci.created_at, ci.updated_at FROM cart_items ci
+WHERE ci.user_id = $1
+ORDER BY ci.created_at ASC
+`
+
+func (q *Queries) GetCartByUserID(ctx context.Context, userID int64) ([]CartItem, error) {
+	rows, err := q.db.Query(ctx, getCartByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CartItem
+	for rows.Next() {
+		var i CartItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ProductID,
+			&i.Quantity,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCartCountByUserID = `-- name: GetCartCountByUserID :one
+SELECT COUNT(*) FROM cart_items WHERE user_id = $1
+`
+
+func (q *Queries) GetCartCountByUserID(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, getCartCountByUserID, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getCartItem = `-- name: GetCartItem :one
+SELECT id, user_id, product_id, quantity, created_at, updated_at FROM cart_items WHERE id = $1 AND user_id = $2 LIMIT 1
+`
+
+type GetCartItemParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) GetCartItem(ctx context.Context, arg GetCartItemParams) (CartItem, error) {
+	row := q.db.QueryRow(ctx, getCartItem, arg.ID, arg.UserID)
+	var i CartItem
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ProductID,
+		&i.Quantity,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getCartItemByProduct = `-- name: GetCartItemByProduct :one
+SELECT id, user_id, product_id, quantity, created_at, updated_at FROM cart_items WHERE user_id = $1 AND product_id = $2 LIMIT 1
+`
+
+type GetCartItemByProductParams struct {
+	UserID    int64 `json:"user_id"`
+	ProductID int64 `json:"product_id"`
+}
+
+func (q *Queries) GetCartItemByProduct(ctx context.Context, arg GetCartItemByProductParams) (CartItem, error) {
+	row := q.db.QueryRow(ctx, getCartItemByProduct, arg.UserID, arg.ProductID)
+	var i CartItem
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ProductID,
+		&i.Quantity,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getCategoryByID = `-- name: GetCategoryByID :one
 SELECT id, name_hi, name_en, image_url, sort_order, is_active, created_at FROM categories WHERE id = $1 LIMIT 1
 `
@@ -171,6 +351,27 @@ func (q *Queries) GetCategoryByID(ctx context.Context, id int64) (Category, erro
 		&i.ImageUrl,
 		&i.SortOrder,
 		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getDefaultAddress = `-- name: GetDefaultAddress :one
+SELECT id, user_id, label, full_address, landmark, latitude, longitude, is_default, created_at FROM addresses WHERE user_id = $1 AND is_default = true LIMIT 1
+`
+
+func (q *Queries) GetDefaultAddress(ctx context.Context, userID int64) (Address, error) {
+	row := q.db.QueryRow(ctx, getDefaultAddress, userID)
+	var i Address
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Label,
+		&i.FullAddress,
+		&i.Landmark,
+		&i.Latitude,
+		&i.Longitude,
+		&i.IsDefault,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -320,6 +521,40 @@ func (q *Queries) IsTokenBlacklisted(ctx context.Context, tokenJti string) (bool
 	return is_blacklisted, err
 }
 
+const listAddresses = `-- name: ListAddresses :many
+SELECT id, user_id, label, full_address, landmark, latitude, longitude, is_default, created_at FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC
+`
+
+func (q *Queries) ListAddresses(ctx context.Context, userID int64) ([]Address, error) {
+	rows, err := q.db.Query(ctx, listAddresses, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Address
+	for rows.Next() {
+		var i Address
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Label,
+			&i.FullAddress,
+			&i.Landmark,
+			&i.Latitude,
+			&i.Longitude,
+			&i.IsDefault,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllCategories = `-- name: ListAllCategories :many
 SELECT id, name_hi, name_en, image_url, sort_order, is_active, created_at FROM categories ORDER BY sort_order ASC, id ASC
 `
@@ -440,6 +675,20 @@ func (q *Queries) ListProducts(ctx context.Context, arg ListProductsParams) ([]P
 	return items, nil
 }
 
+const removeCartItem = `-- name: RemoveCartItem :exec
+DELETE FROM cart_items WHERE id = $1 AND user_id = $2
+`
+
+type RemoveCartItemParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) RemoveCartItem(ctx context.Context, arg RemoveCartItemParams) error {
+	_, err := q.db.Exec(ctx, removeCartItem, arg.ID, arg.UserID)
+	return err
+}
+
 const revokeToken = `-- name: RevokeToken :exec
 INSERT INTO token_blacklist (token_jti, expires_at)
 VALUES ($1, $2)
@@ -454,6 +703,59 @@ type RevokeTokenParams struct {
 func (q *Queries) RevokeToken(ctx context.Context, arg RevokeTokenParams) error {
 	_, err := q.db.Exec(ctx, revokeToken, arg.TokenJti, arg.ExpiresAt)
 	return err
+}
+
+const unsetDefaultAddress = `-- name: UnsetDefaultAddress :exec
+UPDATE addresses SET is_default = false WHERE user_id = $1
+`
+
+func (q *Queries) UnsetDefaultAddress(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, unsetDefaultAddress, userID)
+	return err
+}
+
+const updateAddress = `-- name: UpdateAddress :one
+UPDATE addresses
+SET label = $2, full_address = $3, landmark = $4, latitude = $5, longitude = $6, is_default = $7
+WHERE id = $1 AND user_id = $8
+RETURNING id, user_id, label, full_address, landmark, latitude, longitude, is_default, created_at
+`
+
+type UpdateAddressParams struct {
+	ID          int64          `json:"id"`
+	Label       string         `json:"label"`
+	FullAddress string         `json:"full_address"`
+	Landmark    string         `json:"landmark"`
+	Latitude    pgtype.Numeric `json:"latitude"`
+	Longitude   pgtype.Numeric `json:"longitude"`
+	IsDefault   bool           `json:"is_default"`
+	UserID      int64          `json:"user_id"`
+}
+
+func (q *Queries) UpdateAddress(ctx context.Context, arg UpdateAddressParams) (Address, error) {
+	row := q.db.QueryRow(ctx, updateAddress,
+		arg.ID,
+		arg.Label,
+		arg.FullAddress,
+		arg.Landmark,
+		arg.Latitude,
+		arg.Longitude,
+		arg.IsDefault,
+		arg.UserID,
+	)
+	var i Address
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Label,
+		&i.FullAddress,
+		&i.Landmark,
+		&i.Latitude,
+		&i.Longitude,
+		&i.IsDefault,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const updateCategory = `-- name: UpdateCategory :one
@@ -556,6 +858,24 @@ type UpdateUserParams struct {
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
 	_, err := q.db.Exec(ctx, updateUser, arg.ID, arg.Name)
+	return err
+}
+
+const upsertCartItem = `-- name: UpsertCartItem :exec
+INSERT INTO cart_items (user_id, product_id, quantity)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id, product_id)
+DO UPDATE SET quantity = EXCLUDED.quantity, updated_at = NOW()
+`
+
+type UpsertCartItemParams struct {
+	UserID    int64          `json:"user_id"`
+	ProductID int64          `json:"product_id"`
+	Quantity  pgtype.Numeric `json:"quantity"`
+}
+
+func (q *Queries) UpsertCartItem(ctx context.Context, arg UpsertCartItemParams) error {
+	_, err := q.db.Exec(ctx, upsertCartItem, arg.UserID, arg.ProductID, arg.Quantity)
 	return err
 }
 

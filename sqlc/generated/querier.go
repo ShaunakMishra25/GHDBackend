@@ -9,26 +9,40 @@ import (
 )
 
 type Querier interface {
+	ClearCart(ctx context.Context, userID int64) error
 	CountProducts(ctx context.Context, arg CountProductsParams) (int64, error)
+	CreateAddress(ctx context.Context, arg CreateAddressParams) (Address, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteAddress(ctx context.Context, arg DeleteAddressParams) error
 	DeleteCategory(ctx context.Context, id int64) error
 	DeleteProduct(ctx context.Context, id int64) error
+	GetAddressByID(ctx context.Context, arg GetAddressByIDParams) (Address, error)
+	GetCartByUserID(ctx context.Context, userID int64) ([]CartItem, error)
+	GetCartCountByUserID(ctx context.Context, userID int64) (int64, error)
+	GetCartItem(ctx context.Context, arg GetCartItemParams) (CartItem, error)
+	GetCartItemByProduct(ctx context.Context, arg GetCartItemByProductParams) (CartItem, error)
 	GetCategoryByID(ctx context.Context, id int64) (Category, error)
+	GetDefaultAddress(ctx context.Context, userID int64) (Address, error)
 	GetProductByID(ctx context.Context, id int64) (Product, error)
 	GetProductsByIDs(ctx context.Context, ids []int64) ([]Product, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByPhone(ctx context.Context, phone string) (User, error)
 	GetUserDevices(ctx context.Context, userID int64) ([]Device, error)
 	IsTokenBlacklisted(ctx context.Context, tokenJti string) (bool, error)
+	ListAddresses(ctx context.Context, userID int64) ([]Address, error)
 	ListAllCategories(ctx context.Context) ([]Category, error)
 	ListCategories(ctx context.Context) ([]Category, error)
 	ListProducts(ctx context.Context, arg ListProductsParams) ([]Product, error)
+	RemoveCartItem(ctx context.Context, arg RemoveCartItemParams) error
 	RevokeToken(ctx context.Context, arg RevokeTokenParams) error
+	UnsetDefaultAddress(ctx context.Context, userID int64) error
+	UpdateAddress(ctx context.Context, arg UpdateAddressParams) (Address, error)
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
 	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
+	UpsertCartItem(ctx context.Context, arg UpsertCartItemParams) error
 	UpsertDevice(ctx context.Context, arg UpsertDeviceParams) error
 }
 

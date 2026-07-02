@@ -14,7 +14,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/gumla-hds/gumla-backend/config"
+	"github.com/gumla-hds/gumla-backend/internal/address"
 	"github.com/gumla-hds/gumla-backend/internal/auth"
+	"github.com/gumla-hds/gumla-backend/internal/cart"
 	"github.com/gumla-hds/gumla-backend/internal/category"
 	"github.com/gumla-hds/gumla-backend/internal/middleware"
 	"github.com/gumla-hds/gumla-backend/internal/product"
@@ -79,6 +81,14 @@ func (s *Server) setupRoutes() {
 	productSvc := product.NewService(productRepo)
 	productHandler := product.NewHandler(productSvc)
 
+	cartRepo := cart.NewRepository(s.DB)
+	cartSvc := cart.NewService(cartRepo, productRepo)
+	cartHandler := cart.NewHandler(cartSvc)
+
+	addressRepo := address.NewRepository(s.DB)
+	addressSvc := address.NewService(addressRepo)
+	addressHandler := address.NewHandler(addressSvc)
+
 	api := s.Router.Group("/api/v1")
 	{
 		api.GET("/health", s.handleHealth)
@@ -125,6 +135,26 @@ func (s *Server) setupRoutes() {
 				adminProducts.PUT("/:id", productHandler.Update)
 				adminProducts.DELETE("/:id", productHandler.Delete)
 			}
+		}
+
+		cartGroup := api.Group("/cart")
+		cartGroup.Use(middleware.RequireAuth(s.JWTManager, authSvc.IsTokenBlacklisted))
+		{
+			cartGroup.GET("", cartHandler.GetCart)
+			cartGroup.POST("/items", cartHandler.AddItem)
+			cartGroup.PUT("/items/:id", cartHandler.UpdateItem)
+			cartGroup.DELETE("/items/:id", cartHandler.RemoveItem)
+			cartGroup.DELETE("", cartHandler.ClearCart)
+		}
+
+		addressGroup := api.Group("/addresses")
+		addressGroup.Use(middleware.RequireAuth(s.JWTManager, authSvc.IsTokenBlacklisted))
+		{
+			addressGroup.GET("", addressHandler.List)
+			addressGroup.GET("/:id", addressHandler.GetByID)
+			addressGroup.POST("", addressHandler.Create)
+			addressGroup.PUT("/:id", addressHandler.Update)
+			addressGroup.DELETE("/:id", addressHandler.Delete)
 		}
 	}
 }

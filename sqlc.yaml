@@ -5,6 +5,8 @@ sql:
       - "internal/auth/queries.sql"
       - "internal/category/queries.sql"
       - "internal/product/queries.sql"
+      - "internal/cart/queries.sql"
+      - "internal/address/queries.sql"
     engine: "postgresql"
     gen:
       go:
