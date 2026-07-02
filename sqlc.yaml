@@ -7,6 +7,8 @@ sql:
       - "internal/product/queries.sql"
       - "internal/cart/queries.sql"
       - "internal/address/queries.sql"
+      - "internal/order/queries.sql"
+      - "internal/payment/queries.sql"
     engine: "postgresql"
     gen:
       go:

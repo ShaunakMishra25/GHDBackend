@@ -6,25 +6,42 @@ package db
 
 import (
 	"context"
+
+	"github.com/gumla-hds/gumla-backend/internal/types"
 )
 
 type Querier interface {
 	ClearCart(ctx context.Context, userID int64) error
+	CountAllOrders(ctx context.Context) (int64, error)
+	CountOrdersByStatus(ctx context.Context, status types.OrderStatus) (int64, error)
+	CountOrdersByUserID(ctx context.Context, userID int64) (int64, error)
+	CountOrdersByUserIDAndStatus(ctx context.Context, arg CountOrdersByUserIDAndStatusParams) (int64, error)
 	CountProducts(ctx context.Context, arg CountProductsParams) (int64, error)
 	CreateAddress(ctx context.Context, arg CreateAddressParams) (Address, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
+	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
+	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) error
+	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
 	CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteAddress(ctx context.Context, arg DeleteAddressParams) error
 	DeleteCategory(ctx context.Context, id int64) error
 	DeleteProduct(ctx context.Context, id int64) error
 	GetAddressByID(ctx context.Context, arg GetAddressByIDParams) (Address, error)
+	GetAllOrders(ctx context.Context, arg GetAllOrdersParams) ([]GetAllOrdersRow, error)
 	GetCartByUserID(ctx context.Context, userID int64) ([]CartItem, error)
 	GetCartCountByUserID(ctx context.Context, userID int64) (int64, error)
 	GetCartItem(ctx context.Context, arg GetCartItemParams) (CartItem, error)
 	GetCartItemByProduct(ctx context.Context, arg GetCartItemByProductParams) (CartItem, error)
 	GetCategoryByID(ctx context.Context, id int64) (Category, error)
 	GetDefaultAddress(ctx context.Context, userID int64) (Address, error)
+	GetOrderByID(ctx context.Context, id int64) (GetOrderByIDRow, error)
+	GetOrderItems(ctx context.Context, orderID int64) ([]OrderItem, error)
+	GetOrdersByStatus(ctx context.Context, arg GetOrdersByStatusParams) ([]GetOrdersByStatusRow, error)
+	GetOrdersByUserID(ctx context.Context, arg GetOrdersByUserIDParams) ([]GetOrdersByUserIDRow, error)
+	GetOrdersByUserIDAndStatus(ctx context.Context, arg GetOrdersByUserIDAndStatusParams) ([]GetOrdersByUserIDAndStatusRow, error)
+	GetPaymentByOrderID(ctx context.Context, orderID int64) (Payment, error)
+	GetPaymentByRazorpayOrderID(ctx context.Context, razorpayOrderID string) (Payment, error)
 	GetProductByID(ctx context.Context, id int64) (Product, error)
 	GetProductsByIDs(ctx context.Context, ids []int64) ([]Product, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
@@ -40,6 +57,9 @@ type Querier interface {
 	UnsetDefaultAddress(ctx context.Context, userID int64) error
 	UpdateAddress(ctx context.Context, arg UpdateAddressParams) (Address, error)
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
+	UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Order, error)
+	UpdatePaymentFailed(ctx context.Context, razorpayOrderID string) error
+	UpdatePaymentSuccess(ctx context.Context, arg UpdatePaymentSuccessParams) (Payment, error)
 	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
 	UpsertCartItem(ctx context.Context, arg UpsertCartItemParams) error

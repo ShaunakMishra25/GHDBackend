@@ -11,14 +11,16 @@ import (
 
 type Client struct {
 	client        *razorpay.Client
-	keySecret     string
+	KeyID         string
+	KeySecret     string
 	webhookSecret string
 }
 
 func NewClient(keyID, keySecret, webhookSecret string) *Client {
 	return &Client{
 		client:        razorpay.NewClient(keyID, keySecret),
-		keySecret:     keySecret,
+		KeyID:         keyID,
+		KeySecret:     keySecret,
 		webhookSecret: webhookSecret,
 	}
 }
@@ -60,7 +62,7 @@ func (c *Client) CreateOrder(req OrderRequest) (*OrderResponse, error) {
 
 func (c *Client) VerifyPaymentSignature(orderID, paymentID, signature string) bool {
 	payload := orderID + "|" + paymentID
-	expected := computeHMACSHA256(payload, c.keySecret)
+	expected := computeHMACSHA256(payload, c.KeySecret)
 	return hmac.Equal([]byte(expected), []byte(signature))
 }
 

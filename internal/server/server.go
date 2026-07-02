@@ -19,6 +19,8 @@ import (
 	"github.com/gumla-hds/gumla-backend/internal/cart"
 	"github.com/gumla-hds/gumla-backend/internal/category"
 	"github.com/gumla-hds/gumla-backend/internal/middleware"
+	"github.com/gumla-hds/gumla-backend/internal/order"
+	"github.com/gumla-hds/gumla-backend/internal/payment"
 	"github.com/gumla-hds/gumla-backend/internal/product"
 	"github.com/gumla-hds/gumla-backend/pkg/firebase"
 	jwtpkg "github.com/gumla-hds/gumla-backend/pkg/jwt"
@@ -156,6 +158,32 @@ func (s *Server) setupRoutes() {
 			addressGroup.PUT("/:id", addressHandler.Update)
 			addressGroup.DELETE("/:id", addressHandler.Delete)
 		}
+
+		orderRepo := order.NewRepository(s.DB)
+		orderSvc := order.NewService(orderRepo, cartSvc, productRepo, addressRepo)
+		orderHandler := order.NewHandler(orderSvc)
+
+		orderGroup := api.Group("/orders")
+		orderGroup.Use(middleware.RequireAuth(s.JWTManager, authSvc.IsTokenBlacklisted))
+		{
+			orderGroup.POST("", orderHandler.Create)
+			orderGroup.GET("", orderHandler.List)
+			orderGroup.GET("/:id", orderHandler.GetByID)
+			orderGroup.PATCH("/:id/status", orderHandler.UpdateStatus)
+		}
+
+		paymentRepo := payment.NewRepository(s.DB)
+		paymentSvc := payment.NewService(paymentRepo, s.Razorpay, orderSvc, orderRepo)
+		paymentHandler := payment.NewHandler(paymentSvc)
+
+		paymentGroup := api.Group("/payments")
+		paymentGroup.Use(middleware.RequireAuth(s.JWTManager, authSvc.IsTokenBlacklisted))
+		{
+			paymentGroup.POST("/initiate", paymentHandler.Initiate)
+			paymentGroup.POST("/verify", paymentHandler.Verify)
+		}
+
+		api.POST("/webhook/razorpay", paymentHandler.Webhook)
 	}
 }
 
