@@ -9,6 +9,8 @@ sql:
       - "internal/address/queries.sql"
       - "internal/order/queries.sql"
       - "internal/payment/queries.sql"
+      - "internal/notification/queries.sql"
+      - "internal/admin/queries.sql"
     engine: "postgresql"
     gen:
       go:

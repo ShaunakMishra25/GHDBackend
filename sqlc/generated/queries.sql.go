@@ -89,6 +89,28 @@ func (q *Queries) CountProducts(ctx context.Context, arg CountProductsParams) (i
 	return count, err
 }
 
+const countTodayOrders = `-- name: CountTodayOrders :one
+SELECT COUNT(*) FROM orders WHERE DATE(created_at) = CURRENT_DATE
+`
+
+func (q *Queries) CountTodayOrders(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countTodayOrders)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countUserNotifications = `-- name: CountUserNotifications :one
+SELECT COUNT(*) FROM notifications_log WHERE user_id = $1
+`
+
+func (q *Queries) CountUserNotifications(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countUserNotifications, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAddress = `-- name: CreateAddress :one
 INSERT INTO addresses (user_id, label, full_address, landmark, latitude, longitude, is_default)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -158,6 +180,47 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 		&i.ImageUrl,
 		&i.SortOrder,
 		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createNotificationLog = `-- name: CreateNotificationLog :one
+INSERT INTO notifications_log (user_id, order_id, title, body, status, fcm_error, retry_count)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, user_id, order_id, title, body, status, fcm_error, retry_count, created_at
+`
+
+type CreateNotificationLogParams struct {
+	UserID     int64       `json:"user_id"`
+	OrderID    pgtype.Int8 `json:"order_id"`
+	Title      string      `json:"title"`
+	Body       string      `json:"body"`
+	Status     string      `json:"status"`
+	FcmError   string      `json:"fcm_error"`
+	RetryCount int32       `json:"retry_count"`
+}
+
+func (q *Queries) CreateNotificationLog(ctx context.Context, arg CreateNotificationLogParams) (NotificationsLog, error) {
+	row := q.db.QueryRow(ctx, createNotificationLog,
+		arg.UserID,
+		arg.OrderID,
+		arg.Title,
+		arg.Body,
+		arg.Status,
+		arg.FcmError,
+		arg.RetryCount,
+	)
+	var i NotificationsLog
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.OrderID,
+		&i.Title,
+		&i.Body,
+		&i.Status,
+		&i.FcmError,
+		&i.RetryCount,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -576,6 +639,43 @@ func (q *Queries) GetCategoryByID(ctx context.Context, id int64) (Category, erro
 	return i, err
 }
 
+const getDashboardStats = `-- name: GetDashboardStats :one
+SELECT
+  COALESCE(COUNT(*) FILTER (WHERE DATE(created_at) = CURRENT_DATE), 0)::BIGINT AS today_order_count,
+  COALESCE(SUM(total) FILTER (WHERE DATE(created_at) = CURRENT_DATE), 0)::NUMERIC AS today_revenue,
+  COALESCE(COUNT(*) FILTER (WHERE status = 'pending'), 0)::BIGINT AS pending_order_count,
+  COALESCE(COUNT(*) FILTER (WHERE status = 'dispatched'), 0)::BIGINT AS dispatched_order_count,
+  (SELECT COUNT(*) FROM users)::BIGINT AS total_users,
+  (SELECT COUNT(*) FROM orders)::BIGINT AS total_orders,
+  (SELECT COUNT(*) FROM products WHERE is_active = true)::BIGINT AS active_products
+FROM orders
+`
+
+type GetDashboardStatsRow struct {
+	TodayOrderCount      int64          `json:"today_order_count"`
+	TodayRevenue         pgtype.Numeric `json:"today_revenue"`
+	PendingOrderCount    int64          `json:"pending_order_count"`
+	DispatchedOrderCount int64          `json:"dispatched_order_count"`
+	TotalUsers           int64          `json:"total_users"`
+	TotalOrders          int64          `json:"total_orders"`
+	ActiveProducts       int64          `json:"active_products"`
+}
+
+func (q *Queries) GetDashboardStats(ctx context.Context) (GetDashboardStatsRow, error) {
+	row := q.db.QueryRow(ctx, getDashboardStats)
+	var i GetDashboardStatsRow
+	err := row.Scan(
+		&i.TodayOrderCount,
+		&i.TodayRevenue,
+		&i.PendingOrderCount,
+		&i.DispatchedOrderCount,
+		&i.TotalUsers,
+		&i.TotalOrders,
+		&i.ActiveProducts,
+	)
+	return i, err
+}
+
 const getDefaultAddress = `-- name: GetDefaultAddress :one
 SELECT id, user_id, label, full_address, landmark, latitude, longitude, is_default, created_at FROM addresses WHERE user_id = $1 AND is_default = true LIMIT 1
 `
@@ -659,6 +759,37 @@ func (q *Queries) GetOrderItems(ctx context.Context, orderID int64) ([]OrderItem
 			&i.Quantity,
 			&i.TotalPrice,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOrderStatusCounts = `-- name: GetOrderStatusCounts :many
+SELECT status, COUNT(*)::BIGINT as count
+FROM orders
+GROUP BY status
+`
+
+type GetOrderStatusCountsRow struct {
+	Status types.OrderStatus `json:"status"`
+	Count  int64             `json:"count"`
+}
+
+func (q *Queries) GetOrderStatusCounts(ctx context.Context) ([]GetOrderStatusCountsRow, error) {
+	rows, err := q.db.Query(ctx, getOrderStatusCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOrderStatusCountsRow
+	for rows.Next() {
+		var i GetOrderStatusCountsRow
+		if err := rows.Scan(&i.Status, &i.Count); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -973,6 +1104,72 @@ func (q *Queries) GetProductsByIDs(ctx context.Context, ids []int64) ([]Product,
 	return items, nil
 }
 
+const getTodayOrders = `-- name: GetTodayOrders :many
+SELECT o.id, o.user_id, o.address_id, o.status, o.subtotal, o.delivery_charge, o.total, o.notes, o.created_at, o.updated_at, a.full_address as address_text, u.phone as user_phone, u.name as user_name
+FROM orders o
+JOIN addresses a ON a.id = o.address_id
+JOIN users u ON u.id = o.user_id
+WHERE DATE(o.created_at) = CURRENT_DATE
+ORDER BY o.created_at DESC
+LIMIT $1
+OFFSET $2
+`
+
+type GetTodayOrdersParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type GetTodayOrdersRow struct {
+	ID             int64              `json:"id"`
+	UserID         int64              `json:"user_id"`
+	AddressID      int64              `json:"address_id"`
+	Status         types.OrderStatus  `json:"status"`
+	Subtotal       pgtype.Numeric     `json:"subtotal"`
+	DeliveryCharge pgtype.Numeric     `json:"delivery_charge"`
+	Total          pgtype.Numeric     `json:"total"`
+	Notes          string             `json:"notes"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	AddressText    string             `json:"address_text"`
+	UserPhone      string             `json:"user_phone"`
+	UserName       string             `json:"user_name"`
+}
+
+func (q *Queries) GetTodayOrders(ctx context.Context, arg GetTodayOrdersParams) ([]GetTodayOrdersRow, error) {
+	rows, err := q.db.Query(ctx, getTodayOrders, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTodayOrdersRow
+	for rows.Next() {
+		var i GetTodayOrdersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.AddressID,
+			&i.Status,
+			&i.Subtotal,
+			&i.DeliveryCharge,
+			&i.Total,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AddressText,
+			&i.UserPhone,
+			&i.UserName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, phone, name, role, created_at, updated_at FROM users WHERE id = $1 LIMIT 1
 `
@@ -1028,6 +1225,50 @@ func (q *Queries) GetUserDevices(ctx context.Context, userID int64) ([]Device, e
 			&i.FcmToken,
 			&i.DeviceInfo,
 			&i.LastActiveAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserNotifications = `-- name: GetUserNotifications :many
+SELECT id, user_id, order_id, title, body, status, fcm_error, retry_count, created_at FROM notifications_log
+WHERE user_id = $1
+ORDER BY created_at DESC
+LIMIT $2
+OFFSET $3
+`
+
+type GetUserNotificationsParams struct {
+	UserID int64 `json:"user_id"`
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) GetUserNotifications(ctx context.Context, arg GetUserNotificationsParams) ([]NotificationsLog, error) {
+	rows, err := q.db.Query(ctx, getUserNotifications, arg.UserID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []NotificationsLog
+	for rows.Next() {
+		var i NotificationsLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.OrderID,
+			&i.Title,
+			&i.Body,
+			&i.Status,
+			&i.FcmError,
+			&i.RetryCount,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -1325,6 +1566,29 @@ func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) 
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const updateNotificationStatus = `-- name: UpdateNotificationStatus :exec
+UPDATE notifications_log
+SET status = $2, fcm_error = $3, retry_count = $4
+WHERE id = $1
+`
+
+type UpdateNotificationStatusParams struct {
+	ID         int64  `json:"id"`
+	Status     string `json:"status"`
+	FcmError   string `json:"fcm_error"`
+	RetryCount int32  `json:"retry_count"`
+}
+
+func (q *Queries) UpdateNotificationStatus(ctx context.Context, arg UpdateNotificationStatusParams) error {
+	_, err := q.db.Exec(ctx, updateNotificationStatus,
+		arg.ID,
+		arg.Status,
+		arg.FcmError,
+		arg.RetryCount,
+	)
+	return err
 }
 
 const updateOrderStatus = `-- name: UpdateOrderStatus :one

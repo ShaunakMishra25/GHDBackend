@@ -17,8 +17,11 @@ type Querier interface {
 	CountOrdersByUserID(ctx context.Context, userID int64) (int64, error)
 	CountOrdersByUserIDAndStatus(ctx context.Context, arg CountOrdersByUserIDAndStatusParams) (int64, error)
 	CountProducts(ctx context.Context, arg CountProductsParams) (int64, error)
+	CountTodayOrders(ctx context.Context) (int64, error)
+	CountUserNotifications(ctx context.Context, userID int64) (int64, error)
 	CreateAddress(ctx context.Context, arg CreateAddressParams) (Address, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
+	CreateNotificationLog(ctx context.Context, arg CreateNotificationLogParams) (NotificationsLog, error)
 	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) error
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
@@ -34,9 +37,11 @@ type Querier interface {
 	GetCartItem(ctx context.Context, arg GetCartItemParams) (CartItem, error)
 	GetCartItemByProduct(ctx context.Context, arg GetCartItemByProductParams) (CartItem, error)
 	GetCategoryByID(ctx context.Context, id int64) (Category, error)
+	GetDashboardStats(ctx context.Context) (GetDashboardStatsRow, error)
 	GetDefaultAddress(ctx context.Context, userID int64) (Address, error)
 	GetOrderByID(ctx context.Context, id int64) (GetOrderByIDRow, error)
 	GetOrderItems(ctx context.Context, orderID int64) ([]OrderItem, error)
+	GetOrderStatusCounts(ctx context.Context) ([]GetOrderStatusCountsRow, error)
 	GetOrdersByStatus(ctx context.Context, arg GetOrdersByStatusParams) ([]GetOrdersByStatusRow, error)
 	GetOrdersByUserID(ctx context.Context, arg GetOrdersByUserIDParams) ([]GetOrdersByUserIDRow, error)
 	GetOrdersByUserIDAndStatus(ctx context.Context, arg GetOrdersByUserIDAndStatusParams) ([]GetOrdersByUserIDAndStatusRow, error)
@@ -44,9 +49,11 @@ type Querier interface {
 	GetPaymentByRazorpayOrderID(ctx context.Context, razorpayOrderID string) (Payment, error)
 	GetProductByID(ctx context.Context, id int64) (Product, error)
 	GetProductsByIDs(ctx context.Context, ids []int64) ([]Product, error)
+	GetTodayOrders(ctx context.Context, arg GetTodayOrdersParams) ([]GetTodayOrdersRow, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByPhone(ctx context.Context, phone string) (User, error)
 	GetUserDevices(ctx context.Context, userID int64) ([]Device, error)
+	GetUserNotifications(ctx context.Context, arg GetUserNotificationsParams) ([]NotificationsLog, error)
 	IsTokenBlacklisted(ctx context.Context, tokenJti string) (bool, error)
 	ListAddresses(ctx context.Context, userID int64) ([]Address, error)
 	ListAllCategories(ctx context.Context) ([]Category, error)
@@ -57,6 +64,7 @@ type Querier interface {
 	UnsetDefaultAddress(ctx context.Context, userID int64) error
 	UpdateAddress(ctx context.Context, arg UpdateAddressParams) (Address, error)
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
+	UpdateNotificationStatus(ctx context.Context, arg UpdateNotificationStatusParams) error
 	UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Order, error)
 	UpdatePaymentFailed(ctx context.Context, razorpayOrderID string) error
 	UpdatePaymentSuccess(ctx context.Context, arg UpdatePaymentSuccessParams) (Payment, error)

@@ -15,10 +15,12 @@ import (
 
 	"github.com/gumla-hds/gumla-backend/config"
 	"github.com/gumla-hds/gumla-backend/internal/address"
+	"github.com/gumla-hds/gumla-backend/internal/admin"
 	"github.com/gumla-hds/gumla-backend/internal/auth"
 	"github.com/gumla-hds/gumla-backend/internal/cart"
 	"github.com/gumla-hds/gumla-backend/internal/category"
 	"github.com/gumla-hds/gumla-backend/internal/middleware"
+	"github.com/gumla-hds/gumla-backend/internal/notification"
 	"github.com/gumla-hds/gumla-backend/internal/order"
 	"github.com/gumla-hds/gumla-backend/internal/payment"
 	"github.com/gumla-hds/gumla-backend/internal/product"
@@ -184,6 +186,29 @@ func (s *Server) setupRoutes() {
 		}
 
 		api.POST("/webhook/razorpay", paymentHandler.Webhook)
+
+		notifRepo := notification.NewRepository(s.DB)
+		notifSvc := notification.NewService(notifRepo, s.Firebase, authRepo)
+		notifHandler := notification.NewHandler(notifSvc)
+
+		orderHandler.SetNotificationSender(notifSvc)
+
+		notifGroup := api.Group("/notifications")
+		notifGroup.Use(middleware.RequireAuth(s.JWTManager, authSvc.IsTokenBlacklisted))
+		{
+			notifGroup.GET("", notifHandler.List)
+		}
+
+		adminRepo := admin.NewRepository(s.DB)
+		adminSvc := admin.NewService(adminRepo)
+		adminHandler := admin.NewHandler(adminSvc)
+
+		adminGroup := api.Group("/admin")
+		adminGroup.Use(middleware.RequireAuth(s.JWTManager, authSvc.IsTokenBlacklisted))
+		adminGroup.Use(middleware.RequireRole("admin"))
+		{
+			adminGroup.GET("/dashboard", adminHandler.Dashboard)
+		}
 	}
 }
 
